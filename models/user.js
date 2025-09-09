@@ -99,6 +99,82 @@ class User {
         const result = await query(sql, [id]);
         return result.affectedRows > 0;
     }
+
+    // Set password reset token
+    static async setResetToken(email, resetToken, expiresAt) {
+        const sql = 'UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?';
+        const result = await query(sql, [resetToken, expiresAt, email]);
+        return result.affectedRows > 0;
+    }
+
+    // Find user by reset token
+    static async findByResetToken(resetToken) {
+        const sql = 'SELECT * FROM users WHERE reset_token = ? AND reset_token_expires > NOW()';
+        const results = await query(sql, [resetToken]);
+        
+        if (results.length === 0) {
+            return null;
+        }
+        
+        const user = results[0];
+        return new User(user.id, user.username, user.email, user.password, user.role);
+    }
+
+    // Clear reset token
+    static async clearResetToken(id) {
+        const sql = 'UPDATE users SET reset_token = NULL, reset_token_expires = NULL WHERE id = ?';
+        const result = await query(sql, [id]);
+        return result.affectedRows > 0;
+    }
+
+    // Update password
+    static async updatePassword(id, newPassword) {
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+        
+        const sql = 'UPDATE users SET password = ? WHERE id = ?';
+        const result = await query(sql, [hashedPassword, id]);
+        return result.affectedRows > 0;
+    }
+
+    // Set email verification token
+    static async updateVerificationToken(id, verificationToken, expiresAt) {
+        const sql = 'UPDATE users SET verification_token = ?, verification_token_expires = ? WHERE id = ?';
+        const result = await query(sql, [verificationToken, expiresAt, id]);
+        return result.affectedRows > 0;
+    }
+
+    // Find user by verification token
+    static async findByVerificationToken(verificationToken) {
+        const sql = 'SELECT * FROM users WHERE verification_token = ? AND verification_token_expires > NOW()';
+        const results = await query(sql, [verificationToken]);
+        
+        if (results.length === 0) {
+            return null;
+        }
+        
+        const user = results[0];
+        return new User(user.id, user.username, user.email, user.password, user.role);
+    }
+
+    // Verify user email
+    static async verifyEmail(id) {
+        const sql = 'UPDATE users SET email_verified = TRUE, verification_token = NULL, verification_token_expires = NULL WHERE id = ?';
+        const result = await query(sql, [id]);
+        return result.affectedRows > 0;
+    }
+
+    // Check if email is verified
+    static async isEmailVerified(email) {
+        const sql = 'SELECT email_verified FROM users WHERE email = ?';
+        const results = await query(sql, [email]);
+        
+        if (results.length === 0) {
+            return false;
+        }
+        
+        return results[0].email_verified === 1;
+    }
 }
 
 module.exports = User;

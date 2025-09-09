@@ -1,8 +1,14 @@
+const { logger } = require('./logger');
+
 const errorHandler = (err, req, res, next) => {
-    console.error('Error occurred:', {
+    // Log the error with comprehensive details
+    logger.error('Error occurred:', {
         message: err.message,
+        stack: err.stack,
         url: req.url,
         method: req.method,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
         timestamp: new Date().toISOString()
     });
 
@@ -60,4 +66,4 @@ const errorHandler = (err, req, res, next) => {
     });
 };
 
-module.exports = errorHandler;
+module.exports = { errorHandler };

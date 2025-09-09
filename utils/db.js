@@ -91,8 +91,16 @@ const initializeDatabase = async () => {
                             });
                     } else {
                         console.log('✅ Database tables already exist');
-                        connection.release();
-                        resolve(pool);
+                        // Check and update table schema if needed
+                        updateTableSchema(connection)
+                            .then(() => {
+                                connection.release();
+                                resolve(pool);
+                            })
+                            .catch((error) => {
+                                connection.release();
+                                reject(error);
+                            });
                     }
                 });
             });
@@ -104,6 +112,96 @@ const initializeDatabase = async () => {
     }
 };
 
+// Update existing table schema to add missing columns
+const updateTableSchema = async (connection) => {
+    return new Promise((resolve, reject) => {
+        // Check if reset_token column exists
+        connection.query("SHOW COLUMNS FROM users LIKE 'reset_token'", (err, results) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+
+            if (results.length === 0) {
+                console.log('🔧 Adding reset token columns to users table...');
+                
+                // Add reset_token column
+                connection.query("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255) NULL", (err) => {
+                    if (err) {
+                        console.error('❌ Error adding reset_token column:', err.message);
+                        reject(err);
+                        return;
+                    }
+
+                    // Add reset_token_expires column
+                    connection.query("ALTER TABLE users ADD COLUMN reset_token_expires TIMESTAMP NULL", (err) => {
+                        if (err) {
+                            console.error('❌ Error adding reset_token_expires column:', err.message);
+                            reject(err);
+                            return;
+                        }
+
+                        console.log('✅ Reset token columns added successfully');
+                        // Check for email verification columns
+                        checkEmailVerificationColumns(connection, resolve, reject);
+                    });
+                });
+            } else {
+                console.log('✅ Reset token columns already exist');
+                // Check for email verification columns
+                checkEmailVerificationColumns(connection, resolve, reject);
+            }
+        });
+    });
+};
+
+// Check and add email verification columns
+const checkEmailVerificationColumns = (connection, resolve, reject) => {
+    connection.query("SHOW COLUMNS FROM users LIKE 'email_verified'", (err, results) => {
+        if (err) {
+            reject(err);
+            return;
+        }
+
+        if (results.length === 0) {
+            console.log('🔧 Adding email verification columns to users table...');
+            
+            // Add email_verified column
+            connection.query("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE", (err) => {
+                if (err) {
+                    console.error('❌ Error adding email_verified column:', err.message);
+                    reject(err);
+                    return;
+                }
+
+                // Add verification_token column
+                connection.query("ALTER TABLE users ADD COLUMN verification_token VARCHAR(255) NULL", (err) => {
+                    if (err) {
+                        console.error('❌ Error adding verification_token column:', err.message);
+                        reject(err);
+                        return;
+                    }
+
+                    // Add verification_token_expires column
+                    connection.query("ALTER TABLE users ADD COLUMN verification_token_expires TIMESTAMP NULL", (err) => {
+                        if (err) {
+                            console.error('❌ Error adding verification_token_expires column:', err.message);
+                            reject(err);
+                            return;
+                        }
+
+                        console.log('✅ Email verification columns added successfully');
+                        resolve();
+                    });
+                });
+            });
+        } else {
+            console.log('✅ Email verification columns already exist');
+            resolve();
+        }
+    });
+};
+
 // Create tables if they don't exist
 const createTables = async (connection) => {
     const createUsersTable = `
@@ -113,6 +211,8 @@ const createTables = async (connection) => {
             email VARCHAR(100) UNIQUE NOT NULL,
             password VARCHAR(255) NOT NULL,
             role ENUM('admin', 'user') DEFAULT 'user',
+            reset_token VARCHAR(255) NULL,
+            reset_token_expires TIMESTAMP NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )

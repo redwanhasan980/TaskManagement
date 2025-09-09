@@ -89,11 +89,35 @@ function validatePagination(page, limit) {
     return { page: pageNum, limit: limitNum };
 }
 
+// Validate password reset token
+function validateResetToken(token) {
+    if (!token || typeof token !== 'string') {
+        return false;
+    }
+    // Check if token is at least 32 characters (crypto.randomBytes(16).toString('hex'))
+    return token.length >= 32;
+}
+
+// Validate new password for reset
+function validateNewPassword(password) {
+    if (!password) {
+        return "New password is required.";
+    }
+
+    if (!validatePassword(password)) {
+        return "Password must be at least 6 characters long.";
+    }
+
+    return null; // no errors
+}
+
 module.exports = {
     validateTaskData,
     validateEmail,
     validatePassword,
     validateUsername,
     validateUserRegistration,
-    validatePagination
+    validatePagination,
+    validateResetToken,
+    validateNewPassword
 };

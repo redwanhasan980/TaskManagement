@@ -14,8 +14,9 @@ npm start
 ```
 
 **That's it!** 🎉 Your app automatically:
+
 - ✅ Creates the database
-- ✅ Creates all tables  
+- ✅ Creates all tables
 - ✅ Inserts default admin user
 - ✅ Ready to use!
 

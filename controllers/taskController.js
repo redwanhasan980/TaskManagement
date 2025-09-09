@@ -1,5 +1,6 @@
 const Task = require("../models/task");
 const { validateTaskData } = require("../utils/validators");
+const { logger, enhancedLogger } = require('../middleware/logger');
 
 // Create Task
 const createTask = async (req, res) => {
@@ -24,6 +25,8 @@ const createTask = async (req, res) => {
 
         const createdTask = await Task.findByIdAndUserId(taskId, req.user.id);
 
+        enhancedLogger.task.created(taskId, req.user.id, title);
+
         res.status(201).json({
             success: true,
             message: "Task created successfully",
@@ -32,7 +35,13 @@ const createTask = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Create task error:', error);
+        logger.error('Task creation failed', {
+            event: 'task.create_error',
+            error: error.message,
+            userId: req.user?.id,
+            taskData: req.body,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to create task",
@@ -60,7 +69,12 @@ const getAllTasks = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get all tasks error:', error);
+        logger.error('Get all tasks failed', {
+            event: 'task.get_all_error',
+            error: error.message,
+            userId: req.user?.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to retrieve tasks",
@@ -89,7 +103,12 @@ const getAllTasksAdmin = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get all tasks admin error:', error);
+        logger.error('Get all tasks admin failed', {
+            event: 'task.get_all_admin_error',
+            error: error.message,
+            userId: req.user?.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to retrieve tasks",
@@ -124,7 +143,13 @@ const getTaskById = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get task by ID error:', error);
+        logger.error('Get task by ID failed', {
+            event: 'task.get_by_id_error',
+            error: error.message,
+            userId: req.user?.id,
+            taskId: req.params.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to retrieve task",
@@ -170,6 +195,8 @@ const updateTask = async (req, res) => {
             updatedTask = await Task.findByIdAndUserId(taskId, req.user.id);
         }
 
+        enhancedLogger.task.updated(id, req.user.id, updateData);
+
         res.json({
             success: true,
             message: "Task updated successfully",
@@ -178,7 +205,14 @@ const updateTask = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Update task error:', error);
+        logger.error('Update task failed', {
+            event: 'task.update_error',
+            error: error.message,
+            userId: req.user?.id,
+            taskId: req.params.id,
+            updateData: req.body,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to update task",
@@ -206,12 +240,20 @@ const deleteTask = async (req, res) => {
             });
         }
 
+        enhancedLogger.task.deleted(taskId, req.user.id);
+
         res.json({
             success: true,
             message: "Task deleted successfully"
         });
     } catch (error) {
-        console.error('Delete task error:', error);
+        logger.error('Delete task failed', {
+            event: 'task.delete_error',
+            error: error.message,
+            userId: req.user?.id,
+            taskId: req.params.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to delete task",
@@ -252,7 +294,13 @@ const searchTasks = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Search tasks error:', error);
+        logger.error('Search tasks failed', {
+            event: 'task.search_error',
+            error: error.message,
+            userId: req.user?.id,
+            searchQuery: req.query.q,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to search tasks",
@@ -286,7 +334,12 @@ const getTaskStats = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get task stats error:', error);
+        logger.error('Get task stats failed', {
+            event: 'task.stats_error',
+            error: error.message,
+            userId: req.user?.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: "Failed to get task statistics",

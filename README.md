@@ -81,6 +81,7 @@ npm start
 ```
 
 **That's it!** The app will automatically:
+
 - ✅ Create the database if it doesn't exist
 - ✅ Create all tables and indexes
 - ✅ Insert default admin user
@@ -266,5 +267,3 @@ If you encounter any issues:
 4. Check the console for error messages
 
 ---
-
-

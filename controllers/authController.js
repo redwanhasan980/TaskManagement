@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/user');
-const { validateEmail, validatePassword } = require('../utils/validators');
+const { validateEmail, validatePassword, validateResetToken, validateNewPassword } = require('../utils/validators');
+const { sendPasswordResetEmail, sendWelcomeEmail, sendVerificationEmail } = require('../utils/emailService');
+const { logger, enhancedLogger } = require('../middleware/logger');
 require('dotenv').config();
 
 // Generate JWT token
@@ -67,22 +70,36 @@ const register = async (req, res) => {
         // Create user
         const userId = await User.create({ username, email, password, role });
 
-        // Generate token
-        const token = generateToken(userId);
+        // Generate verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        // Get created user (without password)
-        const createdUser = await User.findById(userId);
+        // Save verification token to user
+        await User.updateVerificationToken(userId, verificationToken, verificationExpires);
+
+        // Send verification email
+        await sendVerificationEmail(email, verificationToken, username);
+
+        // Log successful registration
+        enhancedLogger.auth.register(userId, email, role, req.ip);
 
         res.status(201).json({
             success: true,
-            message: 'User registered successfully',
+            message: 'User registered successfully! Please check your email for verification instructions.',
             data: {
-                token,
-                user: createdUser.toJSON()
+                userId,
+                email,
+                message: 'A verification email has been sent. Please verify your account before logging in.'
             }
         });
     } catch (error) {
-        console.error('Registration error:', error);
+        logger.error('Registration failed', {
+            event: 'auth.register_failed',
+            error: error.message,
+            stack: error.stack,
+            ip: req.ip,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: 'Registration failed',
@@ -113,9 +130,19 @@ const login = async (req, res) => {
             });
         }
 
+        // Check if email is verified
+        const isEmailVerified = await User.isEmailVerified(email);
+        if (!isEmailVerified) {
+            return res.status(403).json({
+                success: false,
+                message: 'Please verify your email address before logging in. Check your email for verification instructions.'
+            });
+        }
+
         // Verify password
         const isPasswordValid = await user.verifyPassword(password);
         if (!isPasswordValid) {
+            enhancedLogger.auth.loginFailed(email, 'Invalid password', req.ip, req.get('User-Agent'));
             return res.status(401).json({
                 success: false,
                 message: 'Invalid email or password'
@@ -124,6 +151,9 @@ const login = async (req, res) => {
 
         // Generate token
         const token = generateToken(user.id);
+
+        // Log successful login
+        enhancedLogger.auth.login(user.id, email, req.ip, req.get('User-Agent'));
 
         res.json({
             success: true,
@@ -134,7 +164,13 @@ const login = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Login error:', error);
+        logger.error('Login failed', {
+            event: 'auth.login_error',
+            error: error.message,
+            stack: error.stack,
+            ip: req.ip,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: 'Login failed',
@@ -161,7 +197,12 @@ const getProfile = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get profile error:', error);
+        logger.error('Get profile failed', {
+            event: 'auth.get_profile_error',
+            error: error.message,
+            userId: req.user?.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: 'Failed to get profile',
@@ -228,7 +269,12 @@ const updateProfile = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Update profile error:', error);
+        logger.error('Update profile failed', {
+            event: 'auth.update_profile_error',
+            error: error.message,
+            userId: req.user?.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: 'Failed to update profile',
@@ -240,15 +286,207 @@ const updateProfile = async (req, res) => {
 // Logout (client-side token invalidation)
 const logout = async (req, res) => {
     try {
+        logger.info('User logged out', {
+            event: 'auth.logout',
+            userId: req.user?.id,
+            ip: req.ip,
+            timestamp: new Date().toISOString()
+        });
         res.json({
             success: true,
             message: 'Logout successful.'
         });
     } catch (error) {
-        console.error('Logout error:', error);
+        logger.error('Logout failed', {
+            event: 'auth.logout_error',
+            error: error.message,
+            userId: req.user?.id,
+            timestamp: new Date().toISOString()
+        });
         res.status(500).json({
             success: false,
             message: 'Logout failed',
+            error: error.message
+        });
+    }
+};
+
+// Request password reset
+const requestPasswordReset = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        // Validation
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required'
+            });
+        }
+
+        if (!validateEmail(email)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a valid email address'
+            });
+        }
+
+        // Find user by email
+        const user = await User.findByEmail(email);
+        if (!user) {
+            // Don't reveal if user exists or not for security
+            return res.json({
+                success: true,
+                message: 'If an account with that email exists, a password reset link has been sent.'
+            });
+        }
+
+        // Generate reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+        // Save reset token to database
+        await User.setResetToken(email, resetToken, resetTokenExpires);
+
+        // Send password reset email
+        const emailSent = await sendPasswordResetEmail(email, resetToken, user.username);
+        
+        // Always return success since we have console fallback
+        enhancedLogger.auth.passwordResetRequest(email, req.ip);
+        res.json({
+            success: true,
+            message: 'Password reset token has been generated. Check your email or server console for the token and Postman instructions.'
+        });
+
+    } catch (error) {
+        logger.error('Password reset request failed', {
+            event: 'auth.password_reset_request_error',
+            error: error.message,
+            stack: error.stack,
+            ip: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to process password reset request',
+            error: error.message
+        });
+    }
+};
+
+// Reset password with token
+const resetPassword = async (req, res) => {
+    try {
+        const { resetToken, newPassword } = req.body;
+
+        // Validation
+        if (!resetToken) {
+            return res.status(400).json({
+                success: false,
+                message: 'Reset token is required'
+            });
+        }
+
+        if (!validateResetToken(resetToken)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid reset token format'
+            });
+        }
+
+        const passwordValidation = validateNewPassword(newPassword);
+        if (passwordValidation) {
+            return res.status(400).json({
+                success: false,
+                message: passwordValidation
+            });
+        }
+
+        // Find user by reset token
+        const user = await User.findByResetToken(resetToken);
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired reset token'
+            });
+        }
+
+        // Update password
+        await User.updatePassword(user.id, newPassword);
+        
+        // Clear reset token
+        await User.clearResetToken(user.id);
+
+        enhancedLogger.auth.passwordReset(user.id, user.email, req.ip);
+
+        res.json({
+            success: true,
+            message: 'Password has been reset successfully. You can now login with your new password.'
+        });
+
+    } catch (error) {
+        logger.error('Password reset failed', {
+            event: 'auth.password_reset_error',
+            error: error.message,
+            stack: error.stack,
+            ip: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset password',
+            error: error.message
+        });
+    }
+};
+
+// Verify email with token
+const verifyEmail = async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        // Validation
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: 'Verification token is required'
+            });
+        }
+
+        // Find user by verification token
+        const user = await User.findByVerificationToken(token);
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired verification token'
+            });
+        }
+
+        // Verify email
+        await User.verifyEmail(user.id);
+
+        enhancedLogger.auth.emailVerified(user.id, user.email, req.ip);
+
+        res.json({
+            success: true,
+            message: 'Email verified successfully! You can now log in to your account.',
+            data: {
+                email: user.email,
+                verified: true
+            }
+        });
+
+    } catch (error) {
+        logger.error('Email verification failed', {
+            event: 'auth.email_verification_error',
+            error: error.message,
+            stack: error.stack,
+            ip: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to verify email',
             error: error.message
         });
     }
@@ -259,5 +497,8 @@ module.exports = {
     login,
     getProfile,
     updateProfile,
-    logout
+    logout,
+    requestPasswordReset,
+    resetPassword,
+    verifyEmail
 };

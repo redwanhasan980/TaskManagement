@@ -5,7 +5,10 @@ const {
     login,
     getProfile,
     updateProfile,
-    logout
+    logout,
+    requestPasswordReset,
+    resetPassword,
+    verifyEmail
 } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/role');
@@ -13,6 +16,9 @@ const { requireAdmin } = require('../middleware/role');
 // Public routes
 router.post('/register', register);
 router.post('/login', login);
+router.post('/forgot-password', requestPasswordReset);
+router.post('/reset-password', resetPassword);
+router.post('/verify-email', verifyEmail);
 
 // Protected routes (require authentication)
 router.get('/profile', authenticateToken, getProfile);
