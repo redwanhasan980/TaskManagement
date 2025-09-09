@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/user');
 const { validateEmail, validatePassword, validateResetToken, validateNewPassword } = require('../utils/validators');
-const { sendPasswordResetEmail, sendWelcomeEmail, sendVerificationEmail } = require('../utils/emailService');
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../utils/emailService');
 const { logger, enhancedLogger } = require('../middleware/logger');
 require('dotenv').config();
 
