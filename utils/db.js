@@ -1,6 +1,4 @@
 const mysql = require('mysql');
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 // First, create a connection without specifying the database to create it if it doesn't exist
