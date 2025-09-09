@@ -1,13 +1,15 @@
 # Task Management API Documentation
 
-A complete Node.js REST API for task management with authentication and authorization.
+A complete Enterprise-Grade Node.js REST API for task management with email verification, password reset, and professional logging.
 
 ## Table of Contents
 
 - [Setup](#setup)
-- [Authentication](#authentication)
+- [Authentication & Email Verification](#authentication--email-verification)
+- [Password Reset](#password-reset)
 - [API Endpoints](#api-endpoints)
 - [Database Schema](#database-schema)
+- [Logging System](#logging-system)
 - [Error Handling](#error-handling)
 - [Postman Examples](#postman-examples)
 
@@ -29,48 +31,59 @@ DB_PORT=3306
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=24h
 
+# Email Configuration (Gmail)
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+EMAIL_FROM=your-email@gmail.com
+
 # Server Configuration
 PORT=3000
 NODE_ENV=development
 ```
 
-### 2. Database Setup
+### 2. Email Setup (Gmail)
 
-1. Create MySQL database:
+1. Enable 2-Factor Authentication on your Gmail account
+2. Generate an App Password for this application
+3. Use the App Password in `EMAIL_PASS` (not your regular password)
 
-```sql
-CREATE DATABASE task_management;
-```
+### 3. Automatic Database Setup
 
-2. Run the schema file:
+The application automatically:
 
-```bash
-mysql -u root -p task_management < db_schema.sql
-```
+- Creates the database if it doesn't exist
+- Creates all tables with proper schema
+- Adds email verification columns to existing installations
+- Creates default admin user with verified email
+- Sets up indexes for optimal performance
 
-### 3. Start the Server
+**No manual database setup required!**
 
-```bash
-npm install
-npm start
-```
+## Authentication & Email Verification
 
-The API will be available at `http://localhost:3000`
+This API uses JWT (JSON Web Tokens) with email verification for secure authentication.
 
-## Authentication
+### Authentication Flow
 
-This API uses JWT (JSON Web Tokens) for authentication. Include the token in the Authorization header:
-
-```
-Authorization: Bearer <your-jwt-token>
-```
+1. **Register** → User creates account
+2. **Email Verification** → User verifies email with token
+3. **Login** → User can login with verified email
+4. **Access Protected Routes** → Use JWT token in headers
 
 ### Default Admin Account
 
-- **Username**: admin
 - **Email**: admin@example.com
 - **Password**: admin123
 - **Role**: admin
+- **Email Verified**: ✅ Pre-verified
+
+## Password Reset
+
+Secure password reset with email tokens:
+
+1. **Request Reset** → User enters email
+2. **Reset Email** → System sends reset token
+3. **Reset Password** → User resets with token
 
 ## API Endpoints
 
@@ -83,25 +96,110 @@ Authorization: Bearer <your-jwt-token>
 #### Register User
 
 - **POST** `/api/auth/register`
+- **Description**: Creates new user account and sends verification email
 - **Body**:
 
 ```json
 {
   "username": "john_doe",
   "email": "john@example.com",
-  "password": "password123"
+  "password": "password123",
+  "role": "user"
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "message": "User registered successfully! Please check your email for verification instructions.",
+  "data": {
+    "userId": 123,
+    "email": "john@example.com",
+    "message": "A verification email has been sent. Please verify your account before logging in."
+  }
+}
+```
+
+#### Verify Email
+
+- **POST** `/api/auth/verify-email`
+- **Description**: Verifies email address with token from email
+- **Body**:
+
+```json
+{
+  "token": "verification-token-from-email"
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "message": "Email verified successfully! You can now log in to your account.",
+  "data": {
+    "email": "john@example.com",
+    "verified": true
+  }
 }
 ```
 
 #### Login
 
 - **POST** `/api/auth/login`
+- **Description**: Login with verified email (requires email verification)
 - **Body**:
 
 ```json
 {
   "email": "john@example.com",
   "password": "password123"
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "token": "jwt-token-here",
+    "user": {
+      "id": 123,
+      "username": "john_doe",
+      "email": "john@example.com",
+      "role": "user"
+    }
+  }
+}
+```
+
+#### Request Password Reset
+
+- **POST** `/api/auth/forgot-password`
+- **Description**: Sends password reset email with token
+- **Body**:
+
+```json
+{
+  "email": "john@example.com"
+}
+```
+
+#### Reset Password
+
+- **POST** `/api/auth/reset-password`
+- **Description**: Resets password using token from email
+- **Body**:
+
+```json
+{
+  "resetToken": "reset-token-from-email",
+  "newPassword": "newpassword123"
 }
 ```
 
@@ -214,12 +312,9 @@ These endpoints require admin role.
 }
 ```
 
-#### User Management
+#### User Management (Removed)
 
-- **GET** `/api/users` - Get all users
-- **GET** `/api/users/:id` - Get user by ID
-- **PUT** `/api/users/:id` - Update user
-- **DELETE** `/api/users/:id` - Delete user
+**Note**: User management endpoints have been removed to eliminate redundant code. Use the auth endpoints for profile management.
 
 ## Database Schema
 
@@ -232,6 +327,11 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'user') DEFAULT 'user',
+    email_verified BOOLEAN DEFAULT FALSE,
+    verification_token VARCHAR(255) NULL,
+    verification_token_expires TIMESTAMP NULL,
+    reset_token VARCHAR(255) NULL,
+    reset_token_expires TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -252,6 +352,54 @@ CREATE TABLE tasks (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 ```
+
+## Logging System
+
+### Winston Enterprise Logging
+
+The application uses Winston for professional logging with:
+
+- **Daily Rotating Files**: Automatic log rotation with retention policies
+- **Multiple Log Levels**: Application, Error, and Access logs
+- **Structured JSON**: Machine-readable log format
+- **Event Tracking**: Detailed event logging for all operations
+
+### Log Files
+
+```
+logs/
+├── application-YYYY-MM-DD.log  # General application logs
+├── error-YYYY-MM-DD.log        # Error logs only
+└── access-YYYY-MM-DD.log       # HTTP request logs
+```
+
+### Log Events
+
+#### Authentication Events
+
+- `auth.register` - User registration
+- `auth.login` - Successful login
+- `auth.login_failed` - Failed login attempt
+- `auth.email_verified` - Email verification
+- `auth.password_reset_request` - Password reset requested
+- `auth.password_reset` - Password reset completed
+
+#### Task Events
+
+- `task.created` - Task creation
+- `task.updated` - Task update
+- `task.deleted` - Task deletion
+- `task.search` - Task search performed
+
+#### Email Events
+
+- `email.sent` - Email sent successfully
+- `email.failed` - Email sending failed
+
+#### System Events
+
+- `system.startup` - Application startup
+- `system.error` - System errors
 
 ## Error Handling
 
@@ -305,7 +453,22 @@ Content-Type: application/json
 }
 ```
 
-### 2. Login
+**Response**: User created, verification email sent.
+
+### 2. Verify Email
+
+Check your email or console for verification token, then:
+
+```
+POST http://localhost:3000/api/auth/verify-email
+Content-Type: application/json
+
+{
+  "token": "verification-token-from-email"
+}
+```
+
+### 3. Login (requires verified email)
 
 ```
 POST http://localhost:3000/api/auth/login
@@ -317,7 +480,32 @@ Content-Type: application/json
 }
 ```
 
-### 3. Create a Task
+### 4. Password Reset Flow
+
+#### Request Reset:
+
+```
+POST http://localhost:3000/api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "test@example.com"
+}
+```
+
+#### Reset Password:
+
+```
+POST http://localhost:3000/api/auth/reset-password
+Content-Type: application/json
+
+{
+  "resetToken": "reset-token-from-email",
+  "newPassword": "newpassword123"
+}
+```
+
+### 5. Create a Task
 
 ```
 POST http://localhost:3000/api/tasks
@@ -332,14 +520,14 @@ Authorization: Bearer YOUR_JWT_TOKEN
 }
 ```
 
-### 4. Get All Tasks
+### 6. Get All Tasks
 
 ```
 GET http://localhost:3000/api/tasks
 Authorization: Bearer YOUR_JWT_TOKEN
 ```
 
-### 5. Update a Task
+### 7. Update a Task
 
 ```
 PUT http://localhost:3000/api/tasks/1
@@ -354,7 +542,7 @@ Authorization: Bearer YOUR_JWT_TOKEN
 }
 ```
 
-### 6. Delete a Task
+### 8. Delete a Task
 
 ```
 DELETE http://localhost:3000/api/tasks/1
@@ -369,6 +557,16 @@ Authorization: Bearer YOUR_JWT_TOKEN
 - Role-based access control (Admin/User)
 - Password hashing with bcrypt
 - Protected routes
+- **Email verification** for new registrations
+- **Password reset** with secure tokens
+
+✅ **Email Integration**
+
+- Gmail SMTP integration with App Password
+- Email verification for new users
+- Password reset emails with tokens
+- Postman-ready instructions in emails
+- Development fallback to console logging
 
 ✅ **Task Management**
 
@@ -379,16 +577,26 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ✅ **User Management**
 
-- User registration and login
+- User registration with email verification
 - Profile management
 - Admin user management
+- Email verification status tracking
 
 ✅ **Database Integration**
 
-- MySQL database with proper schema
+- MySQL database with auto-schema management
 - Core SQL queries (no ORM)
 - Data validation
 - Error handling
+- **Auto-migration** for new features
+
+✅ **Enterprise Logging**
+
+- Winston professional logging system
+- Daily rotating log files with retention
+- Structured JSON log format
+- Event-based tracking (auth, tasks, email, system)
+- Performance monitoring and error tracking
 
 ✅ **Security**
 
@@ -396,6 +604,8 @@ Authorization: Bearer YOUR_JWT_TOKEN
 - SQL injection prevention
 - Secure password handling
 - JWT token expiration
+- **Email verification requirement**
+- **Secure token-based password reset**
 
 ✅ **API Design**
 
@@ -403,3 +613,4 @@ Authorization: Bearer YOUR_JWT_TOKEN
 - Consistent response format
 - Comprehensive error handling
 - CORS support
+- **Professional logging and monitoring**

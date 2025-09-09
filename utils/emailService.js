@@ -46,7 +46,7 @@ const sendPasswordResetEmail = async (email, resetToken, username) => {
         const resetLink = `http://localhost:${process.env.PORT || 3000}/api/auth/reset-password?token=${resetToken}`;
         
         const mailOptions = {
-            from: `"TaskManagement Support" <${process.env.EMAIL_FROM}>`,
+            from: `"TaskManager Support" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: 'Password Reset Request - Task Management API',
             html: `
@@ -110,7 +110,7 @@ const sendWelcomeEmail = async (email, username) => {
         const transporter = createTransporter();
         
         const mailOptions = {
-            from: `"TaskManagement Support" <${process.env.EMAIL_FROM}>`,
+            from: `"TaskManager Support" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: 'Welcome to Task Management API!',
             html: `
@@ -163,7 +163,7 @@ const sendVerificationEmail = async (email, verificationToken, username) => {
         const transporter = createTransporter();
         
         const mailOptions = {
-            from: `"TaskManagement Support" <${process.env.EMAIL_FROM}>`,
+            from: `"TaskManager Support" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: 'Email Verification - Task Management API',
             html: `
