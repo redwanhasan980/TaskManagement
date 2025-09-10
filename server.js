@@ -4,6 +4,7 @@ require('dotenv').config();
 // Import routes
 const authRoutes = require("./routes/authRoutes");
 const taskRoutes = require("./routes/taskRoutes");
+const userRoutes = require("./routes/userRoutes");
 const { errorHandler } = require("./middleware/errorHandler");
 const { requestLogger, enhancedLogger } = require('./middleware/logger');
 
@@ -30,6 +31,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/users", userRoutes);
 
 // Welcome route
 app.get("/", (req, res) => {
@@ -40,6 +42,7 @@ app.get("/", (req, res) => {
         endpoints: {
             auth: "/api/auth",
             tasks: "/api/tasks",
+            users: "/api/users",
             health: "/health"
         }
     });

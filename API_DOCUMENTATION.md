@@ -312,9 +312,64 @@ These endpoints require admin role.
 }
 ```
 
-#### User Management (Removed)
+#### User Management
 
-**Note**: User management endpoints have been removed to eliminate redundant code. Use the auth endpoints for profile management.
+Admin-only endpoints for managing all users in the system.
+
+##### Get All Users
+
+- **GET** `/api/users`
+- **Headers**: `Authorization: Bearer <admin-token>`
+- **Description**: Returns a list of all users in the system
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "username": "admin",
+        "email": "admin@example.com",
+        "role": "admin",
+        "email_verified": true,
+        "created_at": "2025-01-01T00:00:00.000Z"
+      }
+    ],
+    "count": 1
+  }
+}
+```
+
+##### Get User by ID
+
+- **GET** `/api/users/:id`
+- **Headers**: `Authorization: Bearer <admin-token>`
+- **Description**: Get detailed information about a specific user
+
+##### Update User
+
+- **PUT** `/api/users/:id`
+- **Headers**: `Authorization: Bearer <admin-token>`
+- **Description**: Admin can modify any user's profile
+- **Body**:
+
+```json
+{
+  "username": "updated_username",
+  "email": "updated@example.com",
+  "role": "user"
+}
+```
+
+##### Delete User
+
+- **DELETE** `/api/users/:id`
+- **Headers**: `Authorization: Bearer <admin-token>`
+- **Description**: Admin can delete any user account
+- **Note**: Admins cannot delete their own account
 
 ## Database Schema
 

@@ -355,7 +355,7 @@ const requestPasswordReset = async (req, res) => {
         enhancedLogger.auth.passwordResetRequest(email, req.ip);
         res.json({
             success: true,
-            message: 'Password reset token has been generated. Check your email or server console for the token and Postman instructions.'
+            message: 'Password reset token has been sent to your email. Check your email for the token and instructions.'
         });
 
     } catch (error) {
